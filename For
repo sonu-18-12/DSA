@@ -1,0 +1,16 @@
+SELECT 
+    assem AS assembly_id,
+    main_category,
+
+-- Attribute Category Columns
+{% for i in range(1, 151) %}
+    MAX(CASE WHEN column_no = {{ i }} THEN slave_cat END) AS atr_cat_{{ "%03d" % i }}{% if not loop.last %},{% endif %}
+{% endfor %},
+
+-- End Attribute Columns
+{% for i in range(1, 151) %}
+    MAX(CASE WHEN column_no = {{ i }} THEN end_atr END) AS end_atr_cat_{{ "%03d" % i }}{% if not loop.last %},{% endif %}
+{% endfor %}
+
+FROM processed_attributes
+GROUP BY assem, main_category
