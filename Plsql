@@ -1,0 +1,72 @@
+WITH category_colors AS (
+    SELECT
+        category_code AS color_code,
+        category_desc AS color
+    FROM {{ ref('category_colors') }}
+    WHERE category_desc LIKE '%COLOR'
+    AND category_desc NOT IN ('DIAL COLOR', 'DIAMOND COLOR')
+),
+
+questions AS (
+    SELECT DISTINCT next_category_code
+    FROM {{ ref('questions') }}
+),
+
+assembly_attributes AS (
+    SELECT DISTINCT
+        a.assembly AS assem,
+        a.assembly_sequence AS seq,
+        a.category_code AS cat,
+        a.attr_code AS atr,
+        COALESCE(a.end_of_range_attr, 0) AS end_atr,
+        ABS(a.glue_2_seq) AS glue
+    FROM {{ ref('assembly_attributes') }} a
+    JOIN {{ ref('sku_attr_assembly') }} s
+        ON s.assembly = a.assembly
+    WHERE a.glue_2_seq <> 0
+),
+
+category_positions AS (
+    SELECT
+        master_cat,
+        slave_cat,
+        column_no
+    FROM {{ ref('category_positions') }}
+),
+
+processed_colors AS (
+    SELECT
+        color_code,
+        CASE
+            WHEN color = 'COLOR' THEN color_code
+            WHEN color = 'DIAMOND COLOR' THEN color_code
+            ELSE color_code
+        END AS processed_color
+    FROM category_colors
+),
+
+processed_attributes AS (
+    SELECT
+        aa.assem,
+        aa.cat AS main_category,
+        cp.column_no,
+        cp.slave_cat,
+        aa.end_atr,
+        COALESCE(pc.processed_color, 'DEFAULT_COLOR') AS color
+    FROM assembly_attributes aa
+    LEFT JOIN category_positions cp
+        ON cp.master_cat = aa.cat
+    LEFT JOIN processed_colors pc
+        ON pc.color_code = cp.slave_cat
+)
+
+-- Final pivoted output (like the first query)
+SELECT 
+    assem AS assembly_id,
+    main_category,
+    MAX(CASE WHEN column_no = 1 THEN slave_cat END) AS atr_cat_01,
+    MAX(CASE WHEN column_no = 2 THEN slave_cat END) AS atr_cat_02,
+    MAX(CASE WHEN column_no = 1 THEN end_atr END) AS end_atr_cat_01,
+    MAX(CASE WHEN column_no = 2 THEN end_atr END) AS end_atr_cat_02
+FROM processed_attributes
+GROUP BY assem, main_category
