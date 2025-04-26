@@ -6,12 +6,6 @@ WITH category_positions AS (
     FROM {{ ref('temp_assembly_cats') }}
 ),
 
-product_category AS (
-    SELECT category_code
-    FROM {{ ref('category') }}
-    WHERE category_desc = 'PRODUCT'
-),
-
 assembly_attributes AS (
     SELECT DISTINCT 
         a.assembly AS assem,
@@ -26,7 +20,7 @@ assembly_attributes AS (
     WHERE a.glue_2_seq <> 0
 ),
 
--- Map categories to columns
+-- Join to assign column numbers
 mapped_attributes AS (
     SELECT 
         aa.assem,
@@ -34,15 +28,14 @@ mapped_attributes AS (
         aa.cat,
         aa.atr,
         aa.end_atr,
-        cp.column_no,
-        cp.master_cat,
-        cp.slave_cat
+        cp.column_no
     FROM assembly_attributes aa
     LEFT JOIN category_positions cp
         ON aa.cat = cp.master_cat
+    WHERE cp.column_no IS NOT NULL
 ),
 
--- Deduplicate if multiple rows exist per (assem, column_no)
+-- Deduplicate: Only one row per (assem, column_no)
 deduped_attributes AS (
     SELECT
         assem,
@@ -53,7 +46,6 @@ deduped_attributes AS (
     FROM mapped_attributes
 ),
 
--- Only pick first attribute per (assem, column_no)
 filtered_attributes AS (
     SELECT
         assem,
@@ -64,32 +56,27 @@ filtered_attributes AS (
     WHERE rn = 1
 ),
 
--- Pivot attributes horizontally
+-- Pivot
 pivoted_attributes AS (
     SELECT
         assem,
 
-        MAX(CASE WHEN column_no = 1 THEN atr ELSE NULL END) AS atr_cat_01,
-        MAX(CASE WHEN column_no = 2 THEN atr ELSE NULL END) AS atr_cat_02,
-        MAX(CASE WHEN column_no = 3 THEN atr ELSE NULL END) AS atr_cat_03,
-        MAX(CASE WHEN column_no = 4 THEN atr ELSE NULL END) AS atr_cat_04,
-        MAX(CASE WHEN column_no = 5 THEN atr ELSE NULL END) AS atr_cat_05,
-        -- (Continue this pattern up to 150 if needed)
-        MAX(CASE WHEN column_no = 150 THEN atr ELSE NULL END) AS atr_cat_150,
+        MAX(CASE WHEN column_no = 1 THEN atr END) AS atr_cat_01,
+        MAX(CASE WHEN column_no = 2 THEN atr END) AS atr_cat_02,
+        MAX(CASE WHEN column_no = 3 THEN atr END) AS atr_cat_03,
+        MAX(CASE WHEN column_no = 4 THEN atr END) AS atr_cat_04,
+        MAX(CASE WHEN column_no = 5 THEN atr END) AS atr_cat_05,
 
-        MAX(CASE WHEN column_no = 1 THEN end_atr ELSE NULL END) AS end_atr_cat_01,
-        MAX(CASE WHEN column_no = 2 THEN end_atr ELSE NULL END) AS end_atr_cat_02,
-        MAX(CASE WHEN column_no = 3 THEN end_atr ELSE NULL END) AS end_atr_cat_03,
-        MAX(CASE WHEN column_no = 4 THEN end_atr ELSE NULL END) AS end_atr_cat_04,
-        MAX(CASE WHEN column_no = 5 THEN end_atr ELSE NULL END) AS end_atr_cat_05,
-        -- (Continue similarly for end_atr_cat_150)
-        MAX(CASE WHEN column_no = 150 THEN end_atr ELSE NULL END) AS end_atr_cat_150
+        MAX(CASE WHEN column_no = 1 THEN end_atr END) AS end_atr_cat_01,
+        MAX(CASE WHEN column_no = 2 THEN end_atr END) AS end_atr_cat_02,
+        MAX(CASE WHEN column_no = 3 THEN end_atr END) AS end_atr_cat_03,
+        MAX(CASE WHEN column_no = 4 THEN end_atr END) AS end_atr_cat_04,
+        MAX(CASE WHEN column_no = 5 THEN end_atr END) AS end_atr_cat_05
 
     FROM filtered_attributes
     GROUP BY assem
 )
 
 SELECT
-    ROW_NUMBER() OVER () AS row_id,  -- Optional: row_id for uniqueness
-    pa.*
-FROM pivoted_attributes pa
+    *
+FROM pivoted_attributes
