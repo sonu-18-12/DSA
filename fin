@@ -1,0 +1,74 @@
+{{ config(
+    materialized = 'table'
+) }}
+
+WITH category_positions AS (
+    SELECT 
+        master_cat,
+        slave_cat,
+        column_no
+    FROM {{ ref('temp_assembly_cats') }}
+),
+
+assembly_attributes AS (
+    SELECT DISTINCT 
+        a.assembly AS assem,
+        a.assembly_sequence AS seq,
+        a.category_code AS cat,
+        a.attr_code AS attr,
+        COALESCE(a.end_of_range_attr, 0) AS end_attr,
+        ABS(a.glue_2_seq) AS glue
+    FROM {{ ref('sku_attr') }} s
+    JOIN {{ ref('sku_attr_assembly') }} a
+        ON s.assembly = a.assembly
+    WHERE a.glue_2_seq <> 0
+),
+
+attribute_map AS (
+    SELECT 
+        aa.assem,
+        aa.seq,
+        aa.cat,
+        aa.attr,
+        aa.end_attr,
+        cp.column_no,
+        ROW_NUMBER() OVER (PARTITION BY aa.assem, cp.column_no ORDER BY aa.seq) AS rn
+    FROM assembly_attributes aa
+    LEFT JOIN category_positions cp
+        ON aa.cat = cp.master_cat
+    WHERE cp.column_no IS NOT NULL
+),
+
+filtered_attributes AS (
+    SELECT 
+        assem,
+        column_no,
+        attr,
+        end_attr
+    FROM attribute_map
+    WHERE rn = 1
+),
+
+pivoted_attributes AS (
+    SELECT
+        assem,
+
+        MAX(CASE WHEN column_no = 1 THEN attr END) AS atr_cat_01,
+        MAX(CASE WHEN column_no = 2 THEN attr END) AS atr_cat_02,
+        MAX(CASE WHEN column_no = 3 THEN attr END) AS atr_cat_03,
+        MAX(CASE WHEN column_no = 4 THEN attr END) AS atr_cat_04,
+        MAX(CASE WHEN column_no = 5 THEN attr END) AS atr_cat_05,
+
+        MAX(CASE WHEN column_no = 1 THEN end_attr END) AS end_atr_cat_01,
+        MAX(CASE WHEN column_no = 2 THEN end_attr END) AS end_atr_cat_02,
+        MAX(CASE WHEN column_no = 3 THEN end_attr END) AS end_atr_cat_03,
+        MAX(CASE WHEN column_no = 4 THEN end_attr END) AS end_atr_cat_04,
+        MAX(CASE WHEN column_no = 5 THEN end_attr END) AS end_atr_cat_05
+
+        -- 🔁 You can extend this to column_no = 150 easily using a macro
+    FROM filtered_attributes
+    GROUP BY assem
+)
+
+SELECT *
+FROM pivoted_attributes
