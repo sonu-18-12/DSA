@@ -26,6 +26,7 @@ assembly_attributes AS (
     WHERE a.glue_2_seq <> 0
 ),
 
+-- Map categories to columns
 mapped_attributes AS (
     SELECT 
         aa.assem,
@@ -41,16 +42,39 @@ mapped_attributes AS (
         ON aa.cat = cp.master_cat
 ),
 
+-- Deduplicate if multiple rows exist per (assem, column_no)
+deduped_attributes AS (
+    SELECT
+        assem,
+        column_no,
+        atr,
+        end_atr,
+        ROW_NUMBER() OVER (PARTITION BY assem, column_no ORDER BY seq) AS rn
+    FROM mapped_attributes
+),
+
+-- Only pick first attribute per (assem, column_no)
+filtered_attributes AS (
+    SELECT
+        assem,
+        column_no,
+        atr,
+        end_atr
+    FROM deduped_attributes
+    WHERE rn = 1
+),
+
+-- Pivot attributes horizontally
 pivoted_attributes AS (
     SELECT
         assem,
-        cat AS category,  -- Include category code here
+
         MAX(CASE WHEN column_no = 1 THEN atr ELSE NULL END) AS atr_cat_01,
         MAX(CASE WHEN column_no = 2 THEN atr ELSE NULL END) AS atr_cat_02,
         MAX(CASE WHEN column_no = 3 THEN atr ELSE NULL END) AS atr_cat_03,
         MAX(CASE WHEN column_no = 4 THEN atr ELSE NULL END) AS atr_cat_04,
         MAX(CASE WHEN column_no = 5 THEN atr ELSE NULL END) AS atr_cat_05,
-        -- Continue up to atr_cat_150
+        -- (Continue this pattern up to 150 if needed)
         MAX(CASE WHEN column_no = 150 THEN atr ELSE NULL END) AS atr_cat_150,
 
         MAX(CASE WHEN column_no = 1 THEN end_atr ELSE NULL END) AS end_atr_cat_01,
@@ -58,15 +82,14 @@ pivoted_attributes AS (
         MAX(CASE WHEN column_no = 3 THEN end_atr ELSE NULL END) AS end_atr_cat_03,
         MAX(CASE WHEN column_no = 4 THEN end_atr ELSE NULL END) AS end_atr_cat_04,
         MAX(CASE WHEN column_no = 5 THEN end_atr ELSE NULL END) AS end_atr_cat_05,
-        -- Continue up to end_atr_cat_150
+        -- (Continue similarly for end_atr_cat_150)
         MAX(CASE WHEN column_no = 150 THEN end_atr ELSE NULL END) AS end_atr_cat_150
-    FROM mapped_attributes
-    GROUP BY assem, cat  -- Include category in GROUP BY
+
+    FROM filtered_attributes
+    GROUP BY assem
 )
 
 SELECT
-    ROW_NUMBER() OVER () AS row_id,
-    pa.assem AS assembly_id,   -- Assembly info
-    pa.category,               -- Category info
-    pa.*                       -- Pivoted attributes
+    ROW_NUMBER() OVER () AS row_id,  -- Optional: row_id for uniqueness
+    pa.*
 FROM pivoted_attributes pa
