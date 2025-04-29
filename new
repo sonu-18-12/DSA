@@ -1,4 +1,7 @@
+-- models/watch_assembly_attributes.sql
+
 WITH category_positions AS (
+    -- Mapping category to specific attribute columns (column_no)
     SELECT 
         master_cat,
         slave_cat,
@@ -6,77 +9,49 @@ WITH category_positions AS (
     FROM {{ ref('temp_assembly_cats') }}
 ),
 
-assembly_attributes AS (
-    SELECT DISTINCT 
-        a.assembly AS assem,
-        a.assembly_sequence AS seq,
-        a.category_code AS cat,
-        a.attr_code AS atr,
-        COALESCE(a.end_of_range_attr, 0) AS end_atr,
-        ABS(a.glue_2_seq) AS glue
-    FROM {{ ref('sku_attr') }} s
-    JOIN {{ ref('sku_attr_assembly') }} a
-        ON s.assembly = a.assembly
-    WHERE a.glue_2_seq <> 0
-),
-
--- Join to assign column numbers
-mapped_attributes AS (
+watch_attributes AS (
+    -- Actual attribute records for each watch assembly
     SELECT 
-        aa.assem,
-        aa.seq,
-        aa.cat,
-        aa.atr,
-        aa.end_atr,
+        a.assembly,
+        a.category_code,
+        a.attr_code
+    FROM {{ ref('sku_attr_assembly') }} a
+),
+
+joined_data AS (
+    -- Join attributes to their column positions
+    SELECT
+        wa.assembly,
+        cp.master_cat,
+        wa.category_code,
+        wa.attr_code,
         cp.column_no
-    FROM assembly_attributes aa
+    FROM watch_attributes wa
     LEFT JOIN category_positions cp
-        ON aa.cat = cp.master_cat
-    WHERE cp.column_no IS NOT NULL
+        ON wa.category_code = cp.slave_cat
+    WHERE cp.column_no <= 10  -- Adjust as needed for more columns
 ),
 
--- Deduplicate: Only one row per (assem, column_no)
-deduped_attributes AS (
+-- Pivot attributes into atr_cat_01 to atr_cat_10
+pivoted_data AS (
     SELECT
-        assem,
-        column_no,
-        atr,
-        end_atr,
-        ROW_NUMBER() OVER (PARTITION BY assem, column_no ORDER BY seq) AS rn
-    FROM mapped_attributes
-),
+        assembly,
+        master_cat,
 
-filtered_attributes AS (
-    SELECT
-        assem,
-        column_no,
-        atr,
-        end_atr
-    FROM deduped_attributes
-    WHERE rn = 1
-),
+        MAX(CASE WHEN column_no = 1 THEN attr_code END) AS atr_cat_01,
+        MAX(CASE WHEN column_no = 2 THEN attr_code END) AS atr_cat_02,
+        MAX(CASE WHEN column_no = 3 THEN attr_code END) AS atr_cat_03,
+        MAX(CASE WHEN column_no = 4 THEN attr_code END) AS atr_cat_04,
+        MAX(CASE WHEN column_no = 5 THEN attr_code END) AS atr_cat_05,
+        MAX(CASE WHEN column_no = 6 THEN attr_code END) AS atr_cat_06,
+        MAX(CASE WHEN column_no = 7 THEN attr_code END) AS atr_cat_07,
+        MAX(CASE WHEN column_no = 8 THEN attr_code END) AS atr_cat_08,
+        MAX(CASE WHEN column_no = 9 THEN attr_code END) AS atr_cat_09,
+        MAX(CASE WHEN column_no = 10 THEN attr_code END) AS atr_cat_10
 
--- Pivot
-pivoted_attributes AS (
-    SELECT
-        assem,
-
-        MAX(CASE WHEN column_no = 1 THEN atr END) AS atr_cat_01,
-        MAX(CASE WHEN column_no = 2 THEN atr END) AS atr_cat_02,
-        MAX(CASE WHEN column_no = 3 THEN atr END) AS atr_cat_03,
-        MAX(CASE WHEN column_no = 4 THEN atr END) AS atr_cat_04,
-        MAX(CASE WHEN column_no = 5 THEN atr END) AS atr_cat_05,
-
-        MAX(CASE WHEN column_no = 1 THEN end_atr END) AS end_atr_cat_01,
-        MAX(CASE WHEN column_no = 2 THEN end_atr END) AS end_atr_cat_02,
-        MAX(CASE WHEN column_no = 3 THEN end_atr END) AS end_atr_cat_03,
-        MAX(CASE WHEN column_no = 4 THEN end_atr END) AS end_atr_cat_04,
-        MAX(CASE WHEN column_no = 5 THEN end_atr END) AS end_atr_cat_05
-
-    FROM filtered_attributes
-    GROUP BY assem
+    FROM joined_data
+    GROUP BY assembly, master_cat
 )
 
-SELECT
-    *
-FROM pivoted_attributes
+SELECT *
+FROM pivoted_data
