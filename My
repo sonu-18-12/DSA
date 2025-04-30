@@ -7,7 +7,7 @@ WITH category_positions AS (
     WHERE column_no BETWEEN 1 AND 150
 ),
 
-assembly_attributes AS (
+watch_attributes AS (
     SELECT 
         a.assembly,
         a.category_code,
@@ -18,25 +18,31 @@ assembly_attributes AS (
 
 joined_data AS (
     SELECT
-        aa.assembly,
+        wa.assembly,
         cp.master_cat,
-        cp.column_no,
-        aa.attr_code,
-        aa.end_attr,
-        ROW_NUMBER() OVER (PARTITION BY aa.assembly ORDER BY cp.master_cat) AS master_cat_rank
-    FROM assembly_attributes aa
-    JOIN category_positions cp
-        ON aa.category_code = cp.slave_cat
+        wa.category_code,
+        wa.attr_code,
+        wa.end_attr,
+        cp.column_no
+    FROM watch_attributes wa
+    LEFT JOIN category_positions cp
+        ON wa.category_code = cp.slave_cat
+    WHERE cp.column_no IS NOT NULL
 ),
 
--- Keep only one master_cat per assembly (lowest master_cat)
-filtered_master_cat AS (
-    SELECT *
+-- Add a ranking per assembly to mimic PL/SQL flushing logic
+ranked_data AS (
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY assembly ORDER BY master_cat) AS rn
     FROM joined_data
-    WHERE master_cat_rank = 1
 ),
 
--- Pivot attribute values into columns
+filtered_joined_data AS (
+    SELECT *
+    FROM ranked_data
+    WHERE rn = 1  -- Only one master_cat per assembly, like PL/SQL write_file logic
+),
+
 pivoted_data AS (
     SELECT
         assembly,
@@ -45,7 +51,7 @@ pivoted_data AS (
             , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
             , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
         {% endfor %}
-    FROM filtered_master_cat
+    FROM filtered_joined_data
     GROUP BY assembly, master_cat
 )
 
