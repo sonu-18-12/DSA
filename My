@@ -1,19 +1,4 @@
-WITH filtered_categories AS (
-    SELECT category_code
-    FROM {{ ref('category') }}
-    WHERE category_desc LIKE '%COLOR'
-      AND category_desc NOT IN (
-        'DIAL COLOR',
-        'DIAMOND COLOR',
-        'ENAMEL COLOR',
-        'GIFTWARE COLOR',
-        'GOLD COLOR',
-        'LEATHER COLOR',
-        'NYLON COLOR'
-      )
-),
-
-category_positions AS (
+WITH category_positions AS (
     SELECT 
         master_cat,
         slave_cat,
@@ -22,30 +7,36 @@ category_positions AS (
     WHERE column_no BETWEEN 1 AND 150
 ),
 
-watch_attributes AS (
+assembly_attributes AS (
     SELECT 
         a.assembly,
         a.category_code,
         a.attr_code,
         COALESCE(a.end_of_range_attr, 0) AS end_attr
     FROM {{ ref('sku_attr_assembly') }} a
-    WHERE a.category_code IN (SELECT category_code FROM filtered_categories)
 ),
 
 joined_data AS (
     SELECT
-        wa.assembly,
+        aa.assembly,
         cp.master_cat,
-        wa.category_code,
-        wa.attr_code,
-        wa.end_attr,
-        cp.column_no
-    FROM watch_attributes wa
-    LEFT JOIN category_positions cp
-        ON wa.category_code = cp.slave_cat
-    WHERE cp.column_no BETWEEN 1 AND 150
+        cp.column_no,
+        aa.attr_code,
+        aa.end_attr,
+        ROW_NUMBER() OVER (PARTITION BY aa.assembly ORDER BY cp.master_cat) AS master_cat_rank
+    FROM assembly_attributes aa
+    JOIN category_positions cp
+        ON aa.category_code = cp.slave_cat
 ),
 
+-- Keep only one master_cat per assembly (lowest master_cat)
+filtered_master_cat AS (
+    SELECT *
+    FROM joined_data
+    WHERE master_cat_rank = 1
+),
+
+-- Pivot attribute values into columns
 pivoted_data AS (
     SELECT
         assembly,
@@ -54,7 +45,7 @@ pivoted_data AS (
             , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
             , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
         {% endfor %}
-    FROM joined_data
+    FROM filtered_master_cat
     GROUP BY assembly, master_cat
 )
 
