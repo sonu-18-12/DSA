@@ -1,19 +1,4 @@
-WITH filtered_categories AS (
-    SELECT category_code, category_desc
-    FROM {{ ref('category') }}
-    WHERE category_desc LIKE '%COLOR'
-      AND category_desc NOT IN (
-        'DIAL COLOR',
-        'DIAMOND COLOR',
-        'ENAMEL COLOR',
-        'GIFTWARE COLOR',
-        'GOLD COLOR',
-        'LEATHER COLOR',
-        'NYLON COLOR'
-      )
-),
-
-category_positions AS (
+WITH category_positions AS (
     SELECT 
         master_cat,
         slave_cat,
@@ -42,9 +27,22 @@ joined_data AS (
     FROM watch_attributes wa
     LEFT JOIN category_positions cp
         ON wa.category_code = cp.slave_cat
-    INNER JOIN filtered_categories fc
-        ON wa.category_code = fc.category_code
     WHERE cp.column_no BETWEEN 1 AND 150
+),
+
+-- Rank master_cat per assembly, just like how plsql processes and resets per master_cat
+ranked_master AS (
+    SELECT 
+        *,
+        ROW_NUMBER() OVER (PARTITION BY assembly ORDER BY master_cat DESC) AS rn
+    FROM joined_data
+),
+
+-- Only keep top-ranked (i.e., last one based on order) master_cat per assembly
+filtered_data AS (
+    SELECT *
+    FROM ranked_master
+    WHERE rn = 1
 ),
 
 pivoted_data AS (
@@ -55,7 +53,7 @@ pivoted_data AS (
             , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
             , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
         {% endfor %}
-    FROM joined_data
+    FROM filtered_data
     GROUP BY assembly, master_cat
 )
 
