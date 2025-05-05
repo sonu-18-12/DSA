@@ -30,19 +30,29 @@ joined_data AS (
     WHERE cp.column_no BETWEEN 1 AND 150
 ),
 
--- Rank master_cat per assembly, just like how plsql processes and resets per master_cat
-ranked_master AS (
+-- Rank all master_cat values per assembly and retain the highest one
+master_cat_rank AS (
     SELECT 
-        *,
+        assembly,
+        master_cat,
         ROW_NUMBER() OVER (PARTITION BY assembly ORDER BY master_cat DESC) AS rn
     FROM joined_data
+    WHERE master_cat IS NOT NULL
 ),
 
--- Only keep top-ranked (i.e., last one based on order) master_cat per assembly
-filtered_data AS (
-    SELECT *
-    FROM ranked_master
+top_master_cat AS (
+    SELECT assembly, master_cat
+    FROM master_cat_rank
     WHERE rn = 1
+),
+
+-- Keep only rows belonging to selected master_cat per assembly
+filtered_data AS (
+    SELECT jd.*
+    FROM joined_data jd
+    INNER JOIN top_master_cat tmc
+        ON jd.assembly = tmc.assembly
+       AND jd.master_cat = tmc.master_cat
 ),
 
 pivoted_data AS (
