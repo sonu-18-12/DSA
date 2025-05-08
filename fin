@@ -7,51 +7,61 @@ WITH category_positions AS (
     WHERE column_no BETWEEN 1 AND 150
 ),
 
--- STEP 1: Get product_category_code
+-- STEP 1: Get product_category_code as fallback
 product_category AS (
-    SELECT category_code
+    SELECT category_code AS product_category
     FROM {{ ref('category') }}
     WHERE category_desc = 'product'
     LIMIT 1
 ),
 
--- STEP 2: Get attributes only related to product category
-watch_attributes AS (
+-- STEP 2: Get all attributes for assemblies
+assembly_attributes AS (
     SELECT 
         a.assembly,
         a.category_code,
         a.attr_code,
-        COALESCE(a.end_of_range_attr, 0) AS end_attr
+        COALESCE(a.end_of_range_attr, 0) AS end_attr,
+        ABS(a.glue_2_seq) AS glue,
+        a.glue_2_seq
     FROM {{ ref('sku_attr_assembly') }} a
-    WHERE a.category_code = (SELECT category_code FROM product_category)
 ),
 
--- STEP 3: Join with master/slave category
+-- STEP 3: Join with category positions and rank for glue filtering
 joined_data AS (
     SELECT
-        wa.assembly,
-        cp.master_cat,
-        wa.category_code,
-        wa.attr_code,
-        wa.end_attr,
-        cp.column_no
-    FROM watch_attributes wa
+        aa.assembly,
+        COALESCE(cp.master_cat, pc.product_category) AS master_cat,
+        aa.category_code,
+        aa.attr_code,
+        aa.end_attr,
+        cp.column_no,
+        aa.glue,
+        ROW_NUMBER() OVER (PARTITION BY aa.assembly, cp.master_cat ORDER BY aa.glue ASC) AS glue_rank
+    FROM assembly_attributes aa
     LEFT JOIN category_positions cp
-        ON wa.category_code = cp.slave_cat
-    WHERE cp.column_no BETWEEN 1 AND 150
+        ON aa.category_code = cp.slave_cat
+    CROSS JOIN product_category pc
 ),
 
--- STEP 4: Pivot attributes per assembly and master_cat
+-- STEP 4: Filter to attributes with best glue match per assembly and master_cat
+filtered_data AS (
+    SELECT *
+    FROM joined_data
+    WHERE glue_rank = 1 OR column_no IS NULL  -- Best glue per master_cat or fallback
+),
+
+-- STEP 5: Pivot attributes per assembly and master_cat
 pivoted_data AS (
     SELECT
         assembly,
-        MAX(master_cat) AS master_cat  -- Only one due to filter
+        master_cat
         {% for i in range(1, 151) %}
             , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
             , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
         {% endfor %}
-    FROM joined_data
-    GROUP BY assembly
+    FROM filtered_data
+    GROUP BY assembly, master_cat
 )
 
 SELECT *
