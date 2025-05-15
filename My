@@ -1,59 +1,31 @@
 WITH category_positions AS (
-    SELECT 
-        master_cat,
-        slave_cat,
-        column_no
-    FROM {{ ref('temp_assembly_cats') }}
-    WHERE column_no BETWEEN 1 AND 150
+    SELECT master_cat, slave_cat, column_no FROM {{ ref('temp_assembly_cats') }} WHERE column_no BETWEEN 1 AND 150
 ),
-
 watch_attributes AS (
-    SELECT 
-        a.assembly,
-        a.category_code,
-        a.attr_code,
-        COALESCE(a.end_of_range_attr, 0) AS end_attr
-    FROM {{ ref('sku_attr_assembly') }} a
+    SELECT assembly, category_code, attr_code, COALESCE(end_of_range_attr, 0) AS end_attr
+    FROM {{ ref('sku_attr_assembly') }}
 ),
-
 joined_data AS (
-    SELECT
-        wa.assembly,
-        cp.master_cat,
-        wa.category_code,
-        wa.attr_code,
-        wa.end_attr,
-        cp.column_no
+    SELECT wa.assembly, cp.master_cat, cp.column_no, wa.attr_code, wa.end_attr
     FROM watch_attributes wa
-    LEFT JOIN category_positions cp
-        ON wa.category_code = cp.slave_cat
-    WHERE cp.column_no IS NOT NULL
+    JOIN category_positions cp ON wa.category_code = cp.slave_cat
 ),
-
--- Add a ranking per assembly to mimic PL/SQL flushing logic
-ranked_data AS (
-    SELECT *,
-           ROW_NUMBER() OVER (PARTITION BY assembly ORDER BY master_cat) AS rn
+ranked_master AS (
+    SELECT assembly, master_cat, ROW_NUMBER() OVER (PARTITION BY assembly ORDER BY master_cat DESC) AS rn
     FROM joined_data
 ),
-
-filtered_joined_data AS (
+filtered_data AS (
     SELECT *
-    FROM ranked_data
-    WHERE rn = 1  -- Only one master_cat per assembly, like PL/SQL write_file logic
+    FROM ranked_master
+    WHERE rn = 1
 ),
-
 pivoted_data AS (
-    SELECT
-        assembly,
-        master_cat
-        {% for i in range(1, 151) %}
-            , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
-            , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
-        {% endfor %}
-    FROM filtered_joined_data
+    SELECT assembly, master_cat
+    {% for i in range(1, 151) %}
+      , MAX(CASE WHEN column_no = {{ i }} THEN attr_code END) AS atr_cat_{{ '%03d' % i }}
+      , MAX(CASE WHEN column_no = {{ i }} THEN end_attr END) AS end_atr_cat_{{ '%03d' % i }}
+    {% endfor %}
+    FROM filtered_data
     GROUP BY assembly, master_cat
 )
-
-SELECT *
-FROM pivoted_data
+SELECT * FROM pivoted_data
