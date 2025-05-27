@@ -1,0 +1,140 @@
+with product_category as (
+    select
+        category_code as product_category
+    from category_tbl
+    where category_desc = 'PRODUCT'
+),
+category_colors as (
+    select
+        colr.category_code as color_code,
+        colr.category_desc as color,
+        coalesce(generic_color.category_code, 0) as generic_color_code
+    from category_tbl colr
+    left join category_tbl generic_color
+        on generic_color.category_desc = 'COLOR'
+    where UPPER(colr.category_desc) like '%COLOR'
+      and UPPER(colr.category_desc) not in ('DIAL COLOR', 'DIAMOND COLOR', 'ENAMEL COLOR')
+),
+questions as (
+    select next_category_code
+    from questions_tbl
+    where start_assembly = 'Y'
+    group by next_category_code
+),
+category_positions as (
+    select master_cat, slave_cat, coloumn_no
+    from temp_assembly_cat_tbl
+),
+assembly_attributes as (
+    select
+        sattr.assembly as assem,
+        sattr.assembly_sequence as seq,
+        sattr.category_code as cat,
+        sattr.attr_code as atr,
+        coalesce(sattr.end_of_range_attr, '0') as end_atr,
+        abs(sattr.glue_2_seq) as glu,
+        row_number() over (partition by sattr.assembly order by sattr.assembly_sequence) as assem_rn
+    from sku_atr_tbl sku
+    inner join sku_atr_assembly_tbl sattr
+        on sku.assembly = sattr.assembly
+    where sattr.glue_2_seq <> 0
+    group by
+        sattr.assembly, sattr.assembly_sequence, sattr.category_code,
+        sattr.attr_code, coalesce(sattr.end_of_range_attr, '0'), abs(sattr.glue_2_seq)
+),
+src1 as (
+    -- Main logic
+    select
+        a_attr.assem as assembly,
+        coalesce(colors_tab.generic_color_code, a_attr.cat) as work_index,
+        a_attr.cat as master_cat,
+        case
+            when a_attr.glu < a_attr.seq and coalesce(colors_tab.generic_color_code, a_attr.cat) = a_attr.cat
+                then a_attr.seq
+            when a_attr.glu > a_attr.seq
+                then -1
+        end as cat_seek_val,
+        case
+            when coalesce(colors_tab.generic_color_code, a_attr.cat) = cat_rec.slave_cat
+                then cat_rec.coloumn_no
+            when atr1.work_index1 = cat_rec.slave_cat
+                then cat_rec.coloumn_no
+            else 0
+        end as coloumn_no,
+        case
+            when coalesce(colors_tab.generic_color_code, a_attr.cat) = cat_rec.slave_cat
+                then a_attr.atr
+            when atr1.work_index1 = cat_rec.slave_cat
+                then atr1.atr
+        end as attr_code,
+        case
+            when coalesce(colors_tab.generic_color_code, a_attr.cat) = cat_rec.slave_cat
+                then a_attr.end_atr
+            when atr1.work_index1 = cat_rec.slave_cat
+                then atr1.end_atr
+        end as end_atr,
+        a_attr.glu,
+        a_attr.seq,
+        a_attr.assem_rn
+    from assembly_attributes a_attr
+    inner join category_positions cat_rec
+        on a_attr.cat = cat_rec.master_cat
+    left join category_colors colors_tab
+        on a_attr.cat = colors_tab.color_code
+    left join product_category prod_cat
+        on a_attr.cat = prod_cat.product_category
+    left join (
+        select
+            attr.assem as assembly,
+            coalesce(colors.generic_color_code, attr.cat) as work_index1,
+            attr.atr,
+            attr.end_atr
+        from assembly_attributes attr
+        left join category_colors colors
+            on attr.cat = colors.color_code
+    ) atr1
+        on a_attr.assem = atr1.assembly
+    where prod_cat.product_category is null
+      and (coalesce(colors_tab.generic_color_code, a_attr.cat) = cat_rec.slave_cat
+           or atr1.work_index1 = cat_rec.slave_cat)
+      and a_attr.glu < a_attr.seq
+      and (case when a_attr.glu < a_attr.seq and coalesce(colors_tab.generic_color_code, a_attr.cat) = a_attr.cat then a_attr.seq
+                when a_attr.glu > a_attr.seq then -1
+                else null end) > 0
+
+    union all
+
+    -- Fallback logic: when no match found (similar to "if not found_one")
+    select
+        a_attr.assem as assembly,
+        product_category.product_category as work_index,
+        product_category.product_category as master_cat,
+        1 as cat_seek_val,
+        1 as coloumn_no,
+        a_attr.atr as attr_code,
+        a_attr.end_atr as end_atr,
+        a_attr.glu,
+        a_attr.seq,
+        a_attr.assem_rn
+    from assembly_attributes a_attr
+    cross join product_category
+    where not exists (
+        select 1
+        from category_positions cat_rec
+        where a_attr.cat = cat_rec.master_cat
+    )
+)
+,final_pivot as (
+    select
+        assembly,
+        master_cat as category,
+        {% for i in range(1, 151) %}
+            max(case when coloumn_no = {{i}} then attr_code end) as attribute_{{i}},
+        {% endfor %}
+        {% for i in range(1, 151) %}
+            max(case when end_atr is not null and coloumn_no = {{i}} then end_atr end) as end_of_range_attr_{{i}}
+        {% endfor %}
+    from src1
+    group by assembly, master_cat
+)
+select * from final_pivot
