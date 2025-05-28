@@ -1,0 +1,12 @@
+-- Example: Create an empty procedure
+CREATE OR REPLACE PROCEDURE cds.my_stored_procedure()
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    my_var INTEGER := 0;
+BEGIN
+    RAISE INFO 'Procedure started';
+    -- Add your logic here
+    RAISE INFO 'Procedure finished';
+END;
+$$;
