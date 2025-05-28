@@ -1,12 +1,82 @@
--- Example: Create an empty procedure
-CREATE OR REPLACE PROCEDURE cds.my_stored_procedure()
+CREATE OR REPLACE PROCEDURE cds.converted_procedure()
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    my_var INTEGER := 0;
+    -- Individual fields from atr_cat_record_type
+    attributes_main_cat NUMERIC;
+    attributes_atr_cat_01 NUMERIC;
+    attributes_atr_cat_02 NUMERIC;
+    attributes_end_atr_cat_01 NUMERIC;
+    attributes_end_atr_cat_02 NUMERIC;
+    
+    categories_main_cat NUMERIC;
+    categories_atr_cat_01 NUMERIC;
+    categories_atr_cat_02 NUMERIC;
+    categories_end_atr_cat_01 NUMERIC;
+    categories_end_atr_cat_02 NUMERIC;
+    
+    init_assem_attr_table_main_cat NUMERIC;
+    init_assem_attr_table_atr_cat_01 NUMERIC;
+    init_assem_attr_table_atr_cat_02 NUMERIC;
+    init_assem_attr_table_end_atr_cat_01 NUMERIC;
+    init_assem_attr_table_end_atr_cat_02 NUMERIC;
+    
+    work_assem_attributes_table_main_cat NUMERIC;
+    work_assem_attributes_table_atr_cat_01 NUMERIC;
+    work_assem_attributes_table_atr_cat_02 NUMERIC;
+    work_assem_attributes_table_end_atr_cat_01 NUMERIC;
+    work_assem_attributes_table_end_atr_cat_02 NUMERIC;
+
+    -- Redshift does not support associative arrays (index by binary_integer) directly
+    -- Replace with arrays or use temp tables
+    atr_rec_table_main_cat NUMERIC[];
+    atr_rec_table_atr_cat_01 NUMERIC[];
+    atr_rec_table_atr_cat_02 NUMERIC[];
+    atr_rec_table_end_atr_cat_01 NUMERIC[];
+    atr_rec_table_end_atr_cat_02 NUMERIC[];
+
+    cat_rec_table_main_cat NUMERIC[];
+    cat_rec_table_atr_cat_01 NUMERIC[];
+    cat_rec_table_atr_cat_02 NUMERIC[];
+    cat_rec_table_end_atr_cat_01 NUMERIC[];
+    cat_rec_table_end_atr_cat_02 NUMERIC[];
+
+    initrec_table_main_cat NUMERIC[];
+    initrec_table_atr_cat_01 NUMERIC[];
+    initrec_table_atr_cat_02 NUMERIC[];
+    initrec_table_end_atr_cat_01 NUMERIC[];
+    initrec_table_end_atr_cat_02 NUMERIC[];
+
+    -- Arrays of numbers and strings
+    err_cat_tab NUMERIC[];
+    category_tab NUMERIC[];
+    cat_seek_tab NUMERIC[];
+    colors_tab NUMERIC[];
+    init_cat_tab NUMERIC[];
+    
+    -- Scalar variables
+    found_one BOOLEAN;
+    diamond_color NUMERIC;
+    generic_color NUMERIC := 0;
+    work_index NUMERIC := 0;
+    last_master NUMERIC := 0;
+    my_assem NUMERIC := 0;
+    my_cat NUMERIC;
+    my_column NUMERIC := 0;
+    product_category NUMERIC;
+    seek_one NUMERIC;
+
+    attribute_data VARCHAR;
+    v_imsdata VARCHAR;
+    v_directory VARCHAR;
+    file_msg VARCHAR;
+    file_name VARCHAR := 'assembly_attributes.dat';
+    open_mode VARCHAR := 'w';
+
+    -- File handling is not supported in Redshift like UTL_FILE; consider external processing with S3, Lambda, or COPY/UNLOAD
+    -- file_handl placeholder for UTL_FILE.FILE_TYPE
 BEGIN
-    RAISE INFO 'Procedure started';
-    -- Add your logic here
-    RAISE INFO 'Procedure finished';
+    -- Logic goes here (e.g., populating arrays, processing data, etc.)
+    RAISE INFO 'Procedure start: ready for logic';
 END;
 $$;
