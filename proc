@@ -3,68 +3,68 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     -- Individual fields from atr_cat_record_type
-    attributes_main_cat NUMERIC;
-    attributes_atr_cat_01 NUMERIC;
-    attributes_atr_cat_02 NUMERIC;
-    attributes_end_atr_cat_01 NUMERIC;
-    attributes_end_atr_cat_02 NUMERIC;
+    attributes_main_cat INTEGER;
+    attributes_atr_cat_01 INTEGER;
+    attributes_atr_cat_02 INTEGER;
+    attributes_end_atr_cat_01 INTEGER;
+    attributes_end_atr_cat_02 INTEGER;
     
-    categories_main_cat NUMERIC;
-    categories_atr_cat_01 NUMERIC;
-    categories_atr_cat_02 NUMERIC;
-    categories_end_atr_cat_01 NUMERIC;
-    categories_end_atr_cat_02 NUMERIC;
+    categories_main_cat INTEGER;
+    categories_atr_cat_01 INTEGER;
+    categories_atr_cat_02 INTEGER;
+    categories_end_atr_cat_01 INTEGER;
+    categories_end_atr_cat_02 INTEGER;
     
-    init_assem_attr_table_main_cat NUMERIC;
-    init_assem_attr_table_atr_cat_01 NUMERIC;
-    init_assem_attr_table_atr_cat_02 NUMERIC;
-    init_assem_attr_table_end_atr_cat_01 NUMERIC;
-    init_assem_attr_table_end_atr_cat_02 NUMERIC;
+    init_assem_attr_table_main_cat INTEGER;
+    init_assem_attr_table_atr_cat_01 INTEGER;
+    init_assem_attr_table_atr_cat_02 INTEGER;
+    init_assem_attr_table_end_atr_cat_01 INTEGER;
+    init_assem_attr_table_end_atr_cat_02 INTEGER;
     
-    work_assem_attributes_table_main_cat NUMERIC;
-    work_assem_attributes_table_atr_cat_01 NUMERIC;
-    work_assem_attributes_table_atr_cat_02 NUMERIC;
-    work_assem_attributes_table_end_atr_cat_01 NUMERIC;
-    work_assem_attributes_table_end_atr_cat_02 NUMERIC;
+    work_assem_attributes_table_main_cat INTEGER;
+    work_assem_attributes_table_atr_cat_01 INTEGER;
+    work_assem_attributes_table_atr_cat_02 INTEGER;
+    work_assem_attributes_table_end_atr_cat_01 INTEGER;
+    work_assem_attributes_table_end_atr_cat_02 INTEGER;
 
     -- Redshift does not support associative arrays (index by binary_integer) directly
     -- Replace with arrays or use temp tables
-    atr_rec_table_main_cat NUMERIC[];
-    atr_rec_table_atr_cat_01 NUMERIC[];
-    atr_rec_table_atr_cat_02 NUMERIC[];
-    atr_rec_table_end_atr_cat_01 NUMERIC[];
-    atr_rec_table_end_atr_cat_02 NUMERIC[];
+    atr_rec_table_main_cat INTEGER[];
+    atr_rec_table_atr_cat_01 INTEGER[];
+    atr_rec_table_atr_cat_02 INTEGER[];
+    atr_rec_table_end_atr_cat_01 INTEGER[];
+    atr_rec_table_end_atr_cat_02 INTEGER[];
 
-    cat_rec_table_main_cat NUMERIC[];
-    cat_rec_table_atr_cat_01 NUMERIC[];
-    cat_rec_table_atr_cat_02 NUMERIC[];
-    cat_rec_table_end_atr_cat_01 NUMERIC[];
-    cat_rec_table_end_atr_cat_02 NUMERIC[];
+    cat_rec_table_main_cat INTEGER[];
+    cat_rec_table_atr_cat_01 INTEGER[];
+    cat_rec_table_atr_cat_02 INTEGER[];
+    cat_rec_table_end_atr_cat_01 INTEGER[];
+    cat_rec_table_end_atr_cat_02 INTEGER[];
 
-    initrec_table_main_cat NUMERIC[];
-    initrec_table_atr_cat_01 NUMERIC[];
-    initrec_table_atr_cat_02 NUMERIC[];
-    initrec_table_end_atr_cat_01 NUMERIC[];
-    initrec_table_end_atr_cat_02 NUMERIC[];
+    initrec_table_main_cat INTEGER[];
+    initrec_table_atr_cat_01 INTEGER[];
+    initrec_table_atr_cat_02 INTEGER[];
+    initrec_table_end_atr_cat_01 INTEGER[];
+    initrec_table_end_atr_cat_02 INTEGER[];
 
     -- Arrays of numbers and strings
-    err_cat_tab NUMERIC[];
-    category_tab NUMERIC[];
-    cat_seek_tab NUMERIC[];
-    colors_tab NUMERIC[];
-    init_cat_tab NUMERIC[];
+    err_cat_tab INTEGER[];
+    category_tab INTEGER[];
+    cat_seek_tab INTEGER[];
+    colors_tab INTEGER[];
+    init_cat_tab INTEGER[];
     
     -- Scalar variables
     found_one BOOLEAN;
-    diamond_color NUMERIC;
-    generic_color NUMERIC := 0;
-    work_index NUMERIC := 0;
-    last_master NUMERIC := 0;
-    my_assem NUMERIC := 0;
-    my_cat NUMERIC;
-    my_column NUMERIC := 0;
-    product_category NUMERIC;
-    seek_one NUMERIC;
+    diamond_color INTEGER;
+    generic_color INTEGER := 0;
+    work_index INTEGER := 0;
+    last_master INTEGER := 0;
+    my_assem INTEGER := 0;
+    my_cat INTEGER;
+    my_column INTEGER := 0;
+    product_category INTEGER;
+    seek_one INTEGER;
 
     attribute_data VARCHAR;
     v_imsdata VARCHAR;
