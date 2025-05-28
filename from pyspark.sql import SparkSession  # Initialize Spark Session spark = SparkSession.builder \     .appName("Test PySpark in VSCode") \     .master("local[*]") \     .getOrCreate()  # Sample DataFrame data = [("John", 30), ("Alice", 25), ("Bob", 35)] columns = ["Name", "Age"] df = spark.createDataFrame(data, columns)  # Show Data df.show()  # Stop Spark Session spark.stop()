@@ -1,0 +1,18 @@
+from pyspark.sql import SparkSession
+
+# Initialize Spark Session
+spark = SparkSession.builder \
+    .appName("Test PySpark in VSCode") \
+    .master("local[*]") \
+    .getOrCreate()
+
+# Sample DataFrame
+data = [("John", 30), ("Alice", 25), ("Bob", 35)]
+columns = ["Name", "Age"]
+df = spark.createDataFrame(data, columns)
+
+# Show Data
+df.show()
+
+# Stop Spark Session
+spark.stop()
